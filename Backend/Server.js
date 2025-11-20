@@ -6,15 +6,18 @@ import { pool } from "./db.js";
 
 dotenv.config();
 const app = express();
-app.use(cors());
+
+app.use(cors({
+  origin: "*" // replace "*" with your frontend URL in production
+}));
 app.use(express.json());
 
-
+// Health check
 app.get("/healthz", (req, res) => {
   res.json({ ok: true, version: "1.0" });
 });
 
-
+// Create a new link
 app.post("/api/links", async (req, res) => {
   try {
     const { target_url, code } = req.body;
@@ -23,8 +26,7 @@ app.post("/api/links", async (req, res) => {
       return res.status(400).json({ error: "Invalid target URL" });
     }
 
-    let shortCode = code;
-    if (!shortCode) shortCode = Math.random().toString(36).substring(2, 8);
+    let shortCode = code || Math.random().toString(36).substring(2, 8);
 
     const existing = await pool.query("SELECT * FROM links WHERE code = $1", [shortCode]);
     if (existing.rows.length > 0) return res.status(409).json({ error: "Code exists" });
@@ -65,32 +67,49 @@ app.get("/api/total-links", async (req, res) => {
 
 // Get single link stats
 app.get("/api/links/:code", async (req, res) => {
-  const { code } = req.params;
-  const result = await pool.query("SELECT * FROM links WHERE code = $1", [code]);
-  if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
-  res.json(result.rows[0]);
+  try {
+    const { code } = req.params;
+    const result = await pool.query("SELECT * FROM links WHERE code = $1", [code]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Delete a link
 app.delete("/api/links/:code", async (req, res) => {
-  const { code } = req.params;
-  await pool.query("DELETE FROM links WHERE code = $1", [code]);
-  res.json({ deleted: true });
+  try {
+    const { code } = req.params;
+    await pool.query("DELETE FROM links WHERE code = $1", [code]);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // Redirect short code
 app.get("/:code", async (req, res) => {
-  const { code } = req.params;
-  const result = await pool.query("SELECT * FROM links WHERE code = $1", [code]);
-  if (result.rows.length === 0) return res.status(404).send("Not found");
+  try {
+    const { code } = req.params;
+    const result = await pool.query("SELECT * FROM links WHERE code = $1", [code]);
+    if (result.rows.length === 0) return res.status(404).send("Not found");
 
-  const link = result.rows[0];
-  await pool.query(
-    "UPDATE links SET clicks = clicks + 1, last_clicked = NOW() WHERE code = $1",
-    [code]
-  );
+    const link = result.rows[0];
+    await pool.query(
+      "UPDATE links SET clicks = clicks + 1, last_clicked = NOW() WHERE code = $1",
+      [code]
+    );
 
-  res.redirect(302, link.target_url);
+    res.redirect(302, link.target_url);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
 });
 
-app.listen(4000, () => console.log("Server running on port 4000"));
+// Render port
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

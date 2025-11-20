@@ -7,10 +7,14 @@ import { pool } from "./db.js";
 dotenv.config();
 const app = express();
 
-app.use(cors({
-  origin: "*" // replace "*" with your frontend URL in production
-}));
+// CORS: Allow all origins for testing; replace with frontend URL in production
+app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+// Root route
+app.get("/", (req, res) => {
+  res.send("TinyLink API is running. Use /api/links to access endpoints.");
+});
 
 // Health check
 app.get("/healthz", (req, res) => {
@@ -26,7 +30,7 @@ app.post("/api/links", async (req, res) => {
       return res.status(400).json({ error: "Invalid target URL" });
     }
 
-    let shortCode = code || Math.random().toString(36).substring(2, 8);
+    const shortCode = code || Math.random().toString(36).substring(2, 8);
 
     const existing = await pool.query("SELECT * FROM links WHERE code = $1", [shortCode]);
     if (existing.rows.length > 0) return res.status(409).json({ error: "Code exists" });
@@ -110,6 +114,10 @@ app.get("/:code", async (req, res) => {
   }
 });
 
-// Render port
+// Catch-all 404 for any unmatched route (Express 5 safe)
+app.use((req, res) => {
+  res.status(404).send("API endpoint not found.");
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

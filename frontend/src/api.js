@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:4000";
+const API_URL = "https://tinylink-urct.onrender.com";
 
 export async function getLinks() {
   return fetch(`${API_URL}/api/links`).then(res => res.json());
